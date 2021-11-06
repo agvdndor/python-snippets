@@ -1,3 +1,4 @@
+"""Helpers for TCPAgent module."""
 import sys
 import logging
 from typing import Callable
@@ -26,7 +27,9 @@ class SocketDisconnectedException(Exception):
     empty bytestring, which indicates that the client
     is no longer connected."""
 
-def receive_n_bytes(sock, num_bytes : int, is_terminated_callback: Callable, logger = None) -> bytes:
+def receive_n_bytes(sock, num_bytes : int,
+                    is_terminated_callback: Callable,
+                    logger = None) -> bytes:
     """Receive exactly num_bytes bytes from the socket,
     sock.recv(n) in itself may return with less than n bytes
 

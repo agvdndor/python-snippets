@@ -1,5 +1,5 @@
+"""Test suite for TCPAgent"""
 from queue import Empty
-import time
 
 import pytest
 
@@ -29,7 +29,7 @@ def test_send_receive_fixed_length_message():
 
 @pytest.mark.timeout(10)
 def test_send_receive_variable_length_message():
-    """Make connection and send fixed length string message."""
+    """Make connection and send variable length string message."""
     test_msg_1 = "test_message1_with some extra_padding"
     test_msg_2 = "test_message2"
     test_msg_3 = "another one"
@@ -58,7 +58,9 @@ def test_send_receive_variable_length_message():
     tcp_client.terminate()
 
 def test_run_logic_override():
+    """Test overriding the base TCPAgent logic."""
     class EchoTCPServer(TCPServer):
+        """Echo all incoming messages back to the sender."""
         def run_logic(self) -> None:
             """Echo the incoming message back to the sender."""
             while not self.is_terminated():
@@ -95,8 +97,16 @@ def test_run_logic_override():
     echo_server.terminate()
 
 def test_decode():
+    """Test custom decoding fn."""
     class CaesarCipherRecvThread(RecvThread):
+        """Recv thread that decodes messages accordign to
+        a Ceasar cipher."""
         def __init__(self, *args, shift=1, **kwargs):
+            """Init.
+
+            Args:
+                shift (int, optional): the shift value for the Caesar Cipher. Defaults to 1.
+            """
             super().__init__(*args, **kwargs)
             self.shift = shift
 
@@ -105,11 +115,11 @@ def test_decode():
             source: https://likegeeks.com/python-caesar-cipher/#Encryption_for_Capital_Letters"""
             message = message.decode()
             plain_text = ""
-            for c in message:
+            for char in message:
                 # check if character is an uppercase letter
-                if c.isupper():
+                if char.isupper():
                     # find the position in 0-25
-                    c_index = ord(c) - ord("A")
+                    c_index = ord(char) - ord("A")
                     # perform the negative shift
                     new_index = (c_index - self.shift) % 26
                     # convert to new character
@@ -119,7 +129,7 @@ def test_decode():
                     plain_text = plain_text + new_character
                 else:
                     # since character is not uppercase, leave it as it is
-                    plain_text += c
+                    plain_text += char
             return plain_text
 
     server = TCPServer(port=6969,
@@ -148,20 +158,27 @@ def test_decode():
     client.terminate()
 
 def test_message_processing():
+    """Test custom processing fn."""
     class CountingRecvThread(RecvThread):
+        """RecvThread that counts the number of received messages."""
         def __init__(self, *args, **kwargs):
+            """Init."""
             super().__init__(*args, **kwargs)
             self.count = 0
 
         def process(self, _) -> None:
+            """Count number of messages."""
             self.count += 1
 
     class CountingSendThread(SendThread):
+        """SendThread that counts the number of sent messages."""
         def __init__(self, *args, **kwargs):
+            """Init."""
             super().__init__(*args, **kwargs)
             self.count = 0
 
         def process(self, _) -> None:
+            """Count the number of messages."""
             self.count += 1
 
     server = TCPServer(port=6969,

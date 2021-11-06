@@ -12,6 +12,9 @@ from typing import Any, Dict
 from helpers import get_logger, receive_n_bytes, SocketDisconnectedException
 
 class TCPAgent(Thread, ABC):
+    """Abstract Parent object for Recv and Send Thread over TCP/IP.
+    It handles the lifecycle of its member threads and the
+    socket connect/disconnect."""
     def __init__(self,
                  address: str = "127.0.0.1",
                  port: int = 6969,
@@ -26,6 +29,33 @@ class TCPAgent(Thread, ABC):
                  send_thread_cls_kwargs: Dict[str, Any] = None,
                  recv_thread_cls = None,
                  recv_thread_cls_kwargs: Dict[str, Any] = None):
+        """Init TCPAgent.
+
+        Args:
+            address (str, optional): Address to connect/bind socket to. Defaults to "127.0.0.1".
+            port (int, optional): Port to connect/bind socket to. Defaults to 6969.
+            log_level (logging.LEVEL, optional): Logging level. Defaults to logging.ERROR.
+            recv_fixed_length (bool, optional): Fixed length message communication or not.
+            Defaults to False.
+            recv_length_descriptor_size (int, optional): Size of length descriptor for
+            variable size message sending, only relevant if recv_fixed_length=False. Defaults to 8.
+            recv_message_length (int, optional): Lenght of fixed length message communication,
+            only relevant if recv_fixed_length=True. Defaults to None.
+            send_fixed_length (bool, optional): Fixed length message communication
+            for sending or not. Defaults to False.
+            send_length_descriptor_size (int, optional): Size of length descriptor for
+            variable size message sending only relevant if send_fixed_length=False. Defaults to 8.
+            send_message_length (int, optional): Size of fixed length message for fixed
+            size message sending. Defaults to None.
+            send_thread_cls (SendThread, optional): Custom SendThread class reference.
+            Defaults to None.
+            send_thread_cls_kwargs (Dict[str, Any], optional): Additional kwargs for custom
+            SendThread class. Defaults to None.
+            recv_thread_cls (RecvThread, optional): Custom RecvThread class reference.
+            Defaults to None.
+            recv_thread_cls_kwargs (Dict[str, Any], optional): Additional kwargs for custom
+            Recvthread class. Defaults to None.
+        """
         self.address = address
         self.port = port
         self.send_queue = Queue()
@@ -75,10 +105,12 @@ class TCPAgent(Thread, ABC):
         super().__init__()
 
     @abstractmethod
-    def connect(self):
-        pass
+    def connect(self) -> None:
+        """Connect socket, called by RecvThread
+        when a disconnected socket is discovered."""
 
     def start(self) -> None:
+        """Start itself and member threads."""
         if not self._terminated:
             self.logger.warning("Thread was already started, call to start was ignored."
                              " Invoke terminate before calling start again")
@@ -90,6 +122,9 @@ class TCPAgent(Thread, ABC):
         super().start()
 
     def terminate(self) -> None:
+        """Send terminate signal to itself
+        member threads. Does not guarantee
+        (immediate) termination."""
         if self._terminated:
             self.logger.warning("Thread was already terminated, call to terminate was ignored."
                                 " Invoke start before calling terminate again")
@@ -105,36 +140,57 @@ class TCPAgent(Thread, ABC):
             except RuntimeError: #pylint: disable=broad-except
                 pass # RuntimeError is raised if the thread finishes beofre we call join()
         self.disconnect()
-        
+
     def is_terminated(self) -> bool:
         "Return whether the object has been terminated or not."
         return self._terminated
-        
+
     def run(self) -> None:
+        """Control is_running logic and call
+        run_logic implemented by child classes."""
         self._running = True
         self.run_logic()
         self._running = False
         super().__init__()
 
     def run_logic(self) -> None:
+        """Run loop. Should terminate gracefully when
+        terminate() is called."""
         self.terminate_event.wait()
 
-    def disconnect(self):
+    def disconnect(self) -> None:
+        """Disconnect socket and free system resources."""
         try:
             self.sock.shutdown(socket.SHUT_RDWR)
             self.sock.close()
         except Exception: #pylint: disable=broad-except
             pass # disconnect is best-effort
 
-    def is_running(self):
+    def is_running(self) -> bool:
+        """Whether the thread is still running or not."""
         return self._running
 
+
 class SendThread(Thread):
+    """Thread that is responsible for monitoring the
+    send queue: popping, encoding, processing and sending the
+    messages added to it."""
     def __init__(self,
                  parent,
                  fixed_length: bool = False,
                  send_message_length: int = None,
                  send_length_descriptor_size: int = None):
+        """Init SendThread object.
+
+        Args:
+            parent (TCPAgent): parent TCPAgent object.
+            fixed_length (bool, optional): Whether communication uses
+            fixed length messages or not. Defaults to False.
+            send_message_length (int, optional): The length of messages
+            (if fixed_length=True). Defaults to None.
+            send_length_descriptor_size (int, optional): The length of the size descriptor
+            (if fixed_length=False). Defaults to None.
+        """
         super().__init__()
         self._running = False
         self._terminated = True
@@ -184,7 +240,13 @@ class SendThread(Thread):
         """process outgoing message before encoding.
         To be overridden."""
 
-    def send_or_retry(self, message):
+    def send_or_retry(self, message) -> None:
+        """Send message until successful or
+        until the thread is being terminated.
+
+        Args:
+            message (Object): the message to send.
+        """
         while not self._terminated:
             try:
                 if self.parent.sock is None:
@@ -195,7 +257,7 @@ class SendThread(Thread):
                     ConnectionAbortedError):
                 time.sleep(1)
 
-    def run(self):
+    def run(self) -> None:
         """Check the send queue for messages,
         encode them and send. Keep retrying until
         successful or terminate signal has been received"""
@@ -225,16 +287,24 @@ class SendThread(Thread):
 
 
 class RecvThread(Thread):
-    """Class to receive, decode and process message."""
+    """Class to receive, decode and process message. Additionally
+    the RecvThread invokes its parent's connect method when it
+    discovers a disconnected socket."""
     def __init__(self, parent,
                     fixed_length: bool = False,
                     recv_message_length: int = None,
                     recv_length_descriptor_size: int = None) -> None:
-        """Create Recvthread object
+        """Init Recv Thread
 
         Args:
-            parent (TCPAgent): Reference to the parent object.
-        """
+            parent (TCPAgent): reference to parent TCPagent object.
+            fixed_length (bool, optional): Whether to use fixed length
+            message communication. Defaults to False.
+            recv_message_length (int, optional): The size of fixed length
+            messages (only if fixed_length=True). Defaults to None.
+            recv_length_descriptor_size (int, optional): The size of a length
+            descriptor for variable size message communication
+            (only if fixed_length=False). Defaults to None."""
         super().__init__()
         self._running = False
         self._terminated = False
@@ -267,12 +337,13 @@ class RecvThread(Thread):
         return self._running
 
     def is_terminated(self) -> bool:
+        """Whether the thread has received the terminate signal or not."""
         return self._terminated
 
-    def process(self, message):
+    def process(self, message) -> None:
         """Process the incoming message."""
 
-    def decode_message(self, message: bytes):
+    def decode_message(self, message: bytes) -> object:
         """Decode incoming bytestring
 
         Args:
@@ -283,7 +354,13 @@ class RecvThread(Thread):
         """
         return message.decode()
 
-    def recv(self):
+    def recv(self) -> object:
+        """Receive the next message according to the communication
+        scheme chosen (fixed/variable length).
+
+        Returns:
+            object: the received message.
+        """
         if self.fixed_length:
             message_encoded = receive_n_bytes(sock=self.parent.sock,
                                             num_bytes=self.recv_message_length,
@@ -304,8 +381,8 @@ class RecvThread(Thread):
         self.process(message_decoded)
 
     def run(self):
-        """Receive, decode and process incoming messages.
-        """
+        """Receive, decode and process incoming messages. If a disconnected
+        socket is discovered the parent's connect method is invoked."""
         self._running = True
         while not self._terminated:
             try:
@@ -331,6 +408,7 @@ class RecvThread(Thread):
         super().__init__() # Reset the thread object so that it can be restarted.
 
 class TCPServer(TCPAgent):
+    """Server implementation of TCPAgent class."""
     def connect(self) :
         """Accept incoming connection on PORT until
         an incoming connection is established or terminate()
@@ -353,7 +431,9 @@ class TCPServer(TCPAgent):
                 except Exception as e: #pylint: disable=broad-except
                     self.logger.exception(e)
 
+
 class TCPClient(TCPAgent):
+    """Client implementation of TCPAgent class."""
     def connect(self):
         """Connect to the argument Address:Port. The method will block
         until a connection is established, a conneciton is not possible
