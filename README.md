@@ -11,4 +11,4 @@
 [x] TCPAgent\
 [ ] GitHub runner for pylint and pytest\
 [ ] OpenCV webcam grabber boilerplate\
-[ ] OpenCV HighGui Boilerplate\
+[ ] OpenCV HighGui Boilerplate
