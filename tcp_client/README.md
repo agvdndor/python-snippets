@@ -1,5 +1,5 @@
 # TCP Agent
-Boilerplate code for an agent that sends and receives messages over TCP/IP either as a client or as a server 
+Boilerplate code for an agent that sends and receives messages over TCP/IP either as a client or as a server. Currently limited to communication with 1 communication partner for simplicity.
 
 ## Usage
 Two usage choices must be made:
