@@ -8,7 +8,7 @@
 
 
 ## TODO
-[x] TCPAgent
-[ ] GitHub runner for pylint and pytest
-[ ] OpenCV webcam grabber boilerplate
-[ ] OpenCV HighGui Boilerplate
+[x] TCPAgent\
+[ ] GitHub runner for pylint and pytest\
+[ ] OpenCV webcam grabber boilerplate\
+[ ] OpenCV HighGui Boilerplate\
