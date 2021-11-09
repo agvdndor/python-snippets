@@ -6,11 +6,9 @@ import socket
 
 def get_logger(name: str, level) -> logging.Logger:
     """Return logger for calling module
-
     Args:
         name (str): [description]
         level ([type]): [description]
-
     Returns:
         logging.Logger: [description]
     """
@@ -32,10 +30,8 @@ def receive_n_bytes(sock, num_bytes : int,
                     logger = None) -> bytes:
     """Receive exactly num_bytes bytes from the socket,
     sock.recv(n) in itself may return with less than n bytes
-
     Args:
         num_bytes (int): The number of bytes to read from the socket
-
     Returns:
         bytes: The byte string read from the socket
     """

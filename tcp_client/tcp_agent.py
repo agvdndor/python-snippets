@@ -9,7 +9,7 @@ from queue import Empty, Queue
 import time
 from typing import Any, Dict
 
-from helpers import get_logger, receive_n_bytes, SocketDisconnectedException
+from .helpers import get_logger, receive_n_bytes, SocketDisconnectedException
 
 class TCPAgent(Thread, ABC):
     """Abstract Parent object for Recv and Send Thread over TCP/IP.
@@ -30,7 +30,6 @@ class TCPAgent(Thread, ABC):
                  recv_thread_cls = None,
                  recv_thread_cls_kwargs: Dict[str, Any] = None):
         """Init TCPAgent.
-
         Args:
             address (str, optional): Address to connect/bind socket to. Defaults to "127.0.0.1".
             port (int, optional): Port to connect/bind socket to. Defaults to 6969.
@@ -137,7 +136,7 @@ class TCPAgent(Thread, ABC):
         for thread in [self.send_thread, self.recv_thread, self]:
             try:
                 thread.join()
-            except RuntimeError: #pylint: disable=broad-except
+            except (RuntimeError, KeyboardInterrupt):
                 pass # RuntimeError is raised if the thread finishes beofre we call join()
         self.disconnect()
 
@@ -181,7 +180,6 @@ class SendThread(Thread):
                  send_message_length: int = None,
                  send_length_descriptor_size: int = None):
         """Init SendThread object.
-
         Args:
             parent (TCPAgent): parent TCPAgent object.
             fixed_length (bool, optional): Whether communication uses
@@ -227,10 +225,8 @@ class SendThread(Thread):
 
     def encode_message(self, message) -> bytes:
         """Encode the message object to bytestring.
-
         Args:
             message (Object): the message to encode
-
         Returns:
             bytes: the encoded message
         """
@@ -243,7 +239,6 @@ class SendThread(Thread):
     def send_or_retry(self, message) -> None:
         """Send message until successful or
         until the thread is being terminated.
-
         Args:
             message (Object): the message to send.
         """
@@ -273,7 +268,7 @@ class SendThread(Thread):
                 self.parent.logger.debug("Sending message: %s, encoding: %s",
                                     str(message), message_encoded)
 
-                if self.send_length_descriptor_size is not None:
+                if not self.fixed_length:
                     message_encoded_size = f"{len(message_encoded):{'0' + str(self.send_length_descriptor_size) + 'd'}}" #pylint: disable=line-too-long
                     self.send_or_retry(message_encoded_size.encode('utf-8'))
                 self.send_or_retry(message_encoded)
@@ -295,7 +290,6 @@ class RecvThread(Thread):
                     recv_message_length: int = None,
                     recv_length_descriptor_size: int = None) -> None:
         """Init Recv Thread
-
         Args:
             parent (TCPAgent): reference to parent TCPagent object.
             fixed_length (bool, optional): Whether to use fixed length
@@ -345,10 +339,8 @@ class RecvThread(Thread):
 
     def decode_message(self, message: bytes) -> object:
         """Decode incoming bytestring
-
         Args:
             message (bytes): incoming bytestring
-
         Returns:
             Object: resulting message.
         """
@@ -357,7 +349,6 @@ class RecvThread(Thread):
     def recv(self) -> object:
         """Receive the next message according to the communication
         scheme chosen (fixed/variable length).
-
         Returns:
             object: the received message.
         """
@@ -439,7 +430,6 @@ class TCPClient(TCPAgent):
         until a connection is established, a conneciton is not possible
         becasue there was already a connected socket or the plc is no longer
         running.
-
         After a connection is made, if possible, a type information message is sent immediately.
         Either a new one or the last sent one if present.
         """
